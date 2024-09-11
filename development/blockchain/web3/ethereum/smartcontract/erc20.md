@@ -6,7 +6,6 @@ tags: ['erc20', 'smartcontract', 'ethereum']
 draft: false
 summary: ''
 images: []
-
 ---
 
 智能合约代币SOLIDITYERC-20
