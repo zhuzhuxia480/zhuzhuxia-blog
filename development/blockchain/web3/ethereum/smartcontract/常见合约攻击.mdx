@@ -1,0 +1,309 @@
+---
+title: '常见合约攻击'
+date: '2024-09-12 '
+lastmod: '2024-09-12'
+tags: ['solidity', 'contract', 'ethereum']
+draft: false
+summary: '常见的智能合约攻击类型'
+layout: PostBanner
+images: []
+---
+
+#### 重入攻击
+
+以太坊虚拟机不允许并发，这意味着消息调用中涉及的两个合约不能同时运行。 外部调用暂停调用合约的执行和内存，直到调用返回，此时执行正常进行。 该过程可以正式描述为将[控制流(opens in a new tab)](https://www.computerhope.com/jargon/c/contflow.htm)转向另一个合约。
+
+尽管这种转向大多数情况下没有危害，但将控制流转向不受信任的合约可能引起问题，例如重入攻击。 当恶意合约在初始函数调用完成之前回调有漏洞的合约时，就会发生重入攻击。 这类攻击最好用一个例子来解释。
+
+考虑一个简单的智能合约（“Victim”），它允许任何人存入和提取以太币：
+
+```solidity
+1// This contract is vulnerable. Do not use in production
+2
+3contract Victim {
+4    mapping (address => uint256) public balances;
+5
+6    function deposit() external payable {
+7        balances[msg.sender] += msg.value;
+8    }
+9
+10    function withdraw() external {
+11        uint256 amount = balances[msg.sender];
+12        (bool success, ) = msg.sender.call.value(amount)("");
+13        require(success);
+14        balances[msg.sender] = 0;
+15    }
+16}
+```
+
+该合约公开了 `withdraw()` 函数，允许用户提取先前存入合约的以太币。 当处理提款时，合约执行以下操作：
+
+1. 检查用户的以太币余额
+2. 将资金发送给调用地址
+3. 将其余额重置为 0，防止用户再提取
+
+`Victim` 合约中的 `withdraw()` 函数遵循“检查-交互-效果”模式。 它*检查*执行所需的条件是否满足（例如，用户的以太币余额是否为正值）并通过向调用者的地址发送以太币来执行*交互*，然后再应用交易的*效果*（例如减少用户的余额）。
+
+如果从外部帐户调用 `withdraw()`，该函数将按预期执行：`msg.sender.call.value()` 向调用方发送以太币。 然而，如果 `msg.sender` 是智能合约帐户调用 `withdraw()`，使用 `msg.sender.call.value()` 发送资金还将使存储在该地址的代码运行。
+
+假设以下是部署在合约地址的代码：
+
+```solidity
+1 contract Attacker {
+2    function beginAttack() external payable {
+3        Victim(victim_address).deposit.value(1 ether)();
+4        Victim(victim_address).withdraw();
+5    }
+6
+7    function() external payable {
+8        if (gasleft() > 40000) {
+9            Victim(victim_address).withdraw();
+10        }
+11    }
+12}
+```
+
+此合约执行下面三项操作：
+
+1. 接受来自另一帐户（如攻击者的外部帐户）的存款
+2. 将 1 个以太币存入 Victim 合约
+3. 提取存储在该智能合约中的 1 个以太币
+
+这里没有什么问题，只是 `Attacker` 有另一个函数，如果传入的 `msg.sender.call.value` 调用剩余的燃料超过 40000，它就再次调用 `Victim` 中的 `withdraw()` 函数。 这使得 `Attacker` 能够重入 `Victim` 合约并在第一次调用 `withdraw` 函数结束*之前*提取更多资金。 这个循环如下所示：
+
+```solidity
+1- Attacker 的外部帐户使用 1 个以太币调用 `Attacker.beginAttack()`
+2- `Attacker.beginAttack()` 将 1 个以太币存入 `Victim`
+3- `Attacker` 调用`Victim` 中的`withdraw()
+4- `Victim` 检查 `Attacker` 的余额（1 个以太币）
+5- `Victim` 发送 1 个以太币给 `Attacker`（触发默认函数）
+6- `Attacker` 再次调用 `Victim.withdraw()`（注意 `Victim` 并没有减少 `Attacker` 第一次提款后的余额）
+7- `Victim` 检查 `Attacker` 的余额（仍然是 1 个以太币，因为它没有应用第一次调用的效果）
+8- `Victim` 发送 1 个以太币给 `Attacker`（触发默认函数，让 `Attacker` 可以重入 `withdraw` 函数）
+9- 这个过程重复进行，直到 `Attacker `耗燃料，此时 `msg.sender.call.value `返回但不会触发额外的提款
+10- 最后 `Victim` 将第一笔交易（和后续交易）的结果应用于其状态，所以 `Attacker` 的余额被设置为 0
+
+```
+
+总结起来就是，由于调用者的余额在函数执行完成之前没有设置为 0，所以后续的调用会成功，让调用者可以多次提取他们的余额。 这种攻击可以用来提空智能合约中的资金，就像 [2016 DAO 黑客攻击(opens in a new tab)](https://www.coindesk.com/learn/2016/06/25/understanding-the-dao-attack/)中发生情况的那样。 正如[公开的重入攻击列表(opens in a new tab)](https://github.com/pcaversaccio/reentrancy-attacks)所示，当前重入攻击仍是智能合约所面临的一个严重问题。
+
+##### 如何防止重入攻击
+
+应对重入攻击一种方法是遵循[检查-效果-交互模式(opens in a new tab)](https://docs.soliditylang.org/en/develop/security-considerations.html#use-the-checks-effects-interactions-pattern)。 这种模式要求按照以下方式执行函数：最先执行在继续执行函数前执行必要检查的代码，再执行操作合约状态的代码，最后执行与其他合约或外部帐户交互的代码。
+
+检查-效果-交互模式在 `Victim` 合约的修订版中采用，如下所示：
+
+```solidity
+1contract NoLongerAVictim {
+2    function withdraw() external {
+3        uint256 amount = balances[msg.sender];
+4        balances[msg.sender] = 0;
+5        (bool success, ) = msg.sender.call.value(amount)("");
+6        require(success);
+7    }
+8}
+```
+
+该合约对用户的余额执行*检查*，应用 `withdraw()` 函数的*效果*（将用户的余额重置为 0）并继续执行*交互*（将以太币发送到用户的地址）。 这确保了合约在外部调用之前更新其存储空间，消除了导致第一次攻击的重入攻击的条件。 `Attacker` 合约可能仍然可以回调 `NoLongerAVictim`，但由于 `balances[msg.sender]` 已设置为 0，额外的提取将引发错误。
+
+另一种方案是使用互斥锁（通常称为“mutex”），它锁定一部分合约状态直到函数调用完成。 互斥锁是通过布尔变量实现的，该变量在函数执行之前设置为 `true`，在调用完成后回滚为 `false`。 如下面的例子所示，使用互斥锁可以防止函数在初始调用仍在进行时不受到递归调用，从而有效地阻止重入攻击。
+
+```solidity
+1pragma solidity ^0.7.0;
+2
+3contract MutexPattern {
+4    bool locked = false;
+5    mapping(address => uint256) public balances;
+6
+7    modifier noReentrancy() {
+8        require(!locked, "Blocked from reentrancy.");
+9        locked = true;
+10        _;
+11        locked = false;
+12    }
+13    // This function is protected by a mutex, so reentrant calls from within `msg.sender.call` cannot call `withdraw` again.
+14    //  The `return` statement evaluates to `true` but still evaluates the `locked = false` statement in the modifier
+15    function withdraw(uint _amount) public payable noReentrancy returns(bool) {
+16        require(balances[msg.sender] >= _amount, "No balance to withdraw.");
+17
+18        balances[msg.sender] -= _amount;
+19        bool (success, ) = msg.sender.call{value: _amount}("");
+20        require(success);
+21
+22        return true;
+23    }
+24}
+```
+
+还可以使用[拉取支付(opens in a new tab)](https://docs.openzeppelin.com/contracts/4.x/api/security#PullPayment) 系统，该系统要求用户从智能合约中提取资金，而不是使用将资金发送到帐户的“推送支付”系统。 这样就消除了意外触发未知地址中代码的可能性（还可以防止某些拒绝服务攻击）。
+
+#### 整数下溢和溢出
+
+当算术运算的结果超出可接受的值范围，导致其“滚动”到可表示的最小值，整数溢出发生。 例如，`uint8` 只能存储最大为 2^-1=255 的值。 算术运算的结果如果大于 `255`，即溢出并重置 `Uint` 为`0`，这类似于汽车里程表，一旦达到最大里程 (999999) 示数就重置为 0。
+
+整数下溢发生的原因类似：算术运算的结果小于可接受的范围。 比方说，你尝试减少 `uint8` 中的一个`0`，结果将只会滚动到最大的可表示值 (`255`)。
+
+整数溢出和下溢都会导致合约的状态变量出现意外变化，引发意外的执行。 以下例子说明了攻击者如何利用智能合约的算数溢出执行无效操作：
+
+```solidity
+1pragma solidity ^0.7.6;
+2
+3// This contract is designed to act as a time vault.
+4//用户可以向合约里存款但至少在一周内无法提款。
+5//用户还可以延长 1 周的等待期。
+6
+7/*
+81. 部署 TimeLock
+92. 使用 TimeLock 地址部署 Attack
+103. 调用 Attack.attack，发送 1 个以太币。 你将能够立即
+11   提取你的以太币。
+12
+13发生了什么？
+14攻击造成了 TimeLock 溢出，并且能够在 1 周的等待期之
+15前提款。
+16*/
+17
+18contract TimeLock {
+19    mapping(address => uint) public balances;
+20    mapping(address => uint) public lockTime;
+21
+22    function deposit() external payable {
+23        balances[msg.sender] += msg.value;
+24        lockTime[msg.sender] = block.timestamp + 1 weeks;
+25    }
+26
+27    function increaseLockTime(uint _secondsToIncrease) public {
+28        lockTime[msg.sender] += _secondsToIncrease;
+29    }
+30
+31    function withdraw() public {
+32        require(balances[msg.sender] > 0, "Insufficient funds");
+33        require(block.timestamp > lockTime[msg.sender], "Lock time not expired");
+34
+35        uint amount = balances[msg.sender];
+36        balances[msg.sender] = 0;
+37
+38        (bool sent, ) = msg.sender.call{value: amount}("");
+39        require(sent, "Failed to send Ether");
+40    }
+41}
+42
+43contract Attack {
+44    TimeLock timeLock;
+45
+46    constructor(TimeLock _timeLock) {
+47        timeLock = TimeLock(_timeLock);
+48    }
+49
+50    fallback() external payable {}
+51
+52    function attack() public payable {
+53        timeLock.deposit{value: msg.value}();
+54        /*
+55        if t = current lock time then we need to find x such that
+56        x + t = 2**256 = 0
+57        so x = -t
+58        2**256 = type(uint).max + 1
+59        so x = type(uint).max + 1 - t
+60        */
+61        timeLock.increaseLockTime(
+62            type(uint).max + 1 - timeLock.lockTime(address(this))
+63        );
+64        timeLock.withdraw();
+65    }
+66}
+```
+
+##### 如何防止整数溢出和下溢
+
+从 0.8.0 版开始，Solidity 编译器禁用导致整数下溢和溢出的代码。 然而，用较低编译器版本编译的合约应当对涉及算术运算的函数执行检查，或者使用检查是否发生下溢/溢出的库（例如 [SafeMath(opens in a new tab)](https://docs.openzeppelin.com/contracts/2.x/api/math)）。
+
+#### 预言机操纵
+
+[预言机](https://ethereum.org/zh/developers/docs/oracles/)获取链下信息并将这些信息发送到链上供智能合约使用。 通过预言机，你可以设计出和链下系统（资本市场）交互的智能合约，极大地拓展它们的应用。
+
+但如果预言机损坏并向链上发送错误信息，智能合约将基于错误的输入执行，这会造成问题。 这就是“预言机问题”的根源，它涉及确保区块链预言机提供准确、最新、即时的信息。
+
+相关的安全问题就是利用链上预言机（例如去中心化交易所）获取一种资产的现货价格。 [去中心化金融 (DeFi)](https://ethereum.org/zh/defi/) 行业中的借贷平台经常利用这种方法确定用户抵押品的价值，进而确定他们能借入多少。
+
+去中心化交易所 (DEX) 的价格往往是准确的，很大程度上源于套利者的套利行为帮助市场恢复平价。 然而，去中心化交易所的价格容易受到操纵，尤其当链上预言机根据历史交易模式计算资产价格时（通常是这种情况）。
+
+例如，攻击者可以在与你的借贷合约交互前，通过获得闪电贷人为拉高资产的现货价格。 在向去中心化交易所 (DEX) 查询资产价格时，将返回一个高于正常水平的值（由于攻击者对大宗“买入订单”影响了资产的需求），这样攻击者就可以借来比原本更多的资金。 这种“闪电贷攻击”一直在利用对去中心化金融应用程序之间的价格预言机的依赖，使许多协议遭受了数百万美元的资金损失。
+
+##### 如何防止预言机操纵
+
+避免预言机操纵的最低要求是，使用从多种来源查询信息的去中心化预言机网络，以避免单点故障。 在大多数情况下，去中心化预言机有內置的加密经济学激励机制，鼓励预言机节点报告正确的信息，使它们比中心化预言机更安全。
+
+如果你打算通过查询链上预言机获得资产价格，考虑使用实施了时间加权平均价格 (TWAP) 机制的预言机。 [时间加权平均价格预言机(opens in a new tab)](https://docs.uniswap.org/contracts/v2/concepts/core-concepts/oracles)查询资产在两个不同时间点（可以修改）的价格，并计算出基于所得平均值的现货价格。 选择较长的时间段可以保护协议免受价格操纵，因为最近执行的大宗订单无法影响资产价格。
+
+## 面向开发者的智能合约安全性资源
+
+### 用于分析智能合约和验证代码正确性的工具
+
+- **[测试工具和程序库](https://ethereum.org/zh/developers/docs/smart-contracts/testing/#testing-tools-and-libraries)** - *为智能合约进行单元测试、静态分析和动态分析的行业标准工具和程序库集合。*
+- **[形式化验证工具](https://ethereum.org/zh/developers/docs/smart-contracts/formal-verification/#formal-verification-tools)** - *用于验证智能合约中的函数正确性和检查不变量的工具。*
+- **[智能合约审计服务](https://ethereum.org/zh/developers/docs/smart-contracts/testing/#smart-contract-auditing-services)** - *为以太坊开发项目提供智能合约审计服务的组织的列表。*
+- **[漏洞奖励平台](https://ethereum.org/zh/developers/docs/smart-contracts/testing/#bug-bounty-platforms)** - *协调漏洞奖励并对发现智能合约中重大漏洞的负责人进行奖励的平台。*
+- **[Fork Checker(opens in a new tab)](https://forkchecker.hashex.org/)** - *免费的在线工具，用于检查所有关于分叉合同的现有信息。*
+- **[ABI 编码器(opens in a new tab)](https://abi.hashex.org/)** - *免费在线服务，用于编码你的 Solidity 合约函数和构造函数参数。*
+
+### 智能合约监测工具
+
+- **[OpenZeppelin Defender Sentinels(opens in a new tab)](https://docs.openzeppelin.com/defender/v1/sentinel)** - *一种用于自动监测和响应智能合约中事件、函数和交易参数的工具。*
+- **[Tenderly Real-Time Alerting(opens in a new tab)](https://tenderly.co/alerting/)** - *一种在智能合约或钱包发生异常或意外事件时，为你获取实时通知的工具。*
+
+### 智能合约的安全管理工具
+
+- **[OpenZeppelin Defender Admin(opens in a new tab)](https://docs.openzeppelin.com/defender/v1/admin)** - *用于智能合约管理的管理界面，包括访问控制、升级和暂停功能。*
+- **[Safe(opens in a new tab)](https://safe.global/)** - *在以太坊上运行的智能合约钱包，需要最少人数批准交易后交易才能进行 (M-of-N)。*
+- **[OpenZeppelin Contracts(opens in a new tab)](https://docs.openzeppelin.com/contracts/4.x/)** - *用于实现管理功能的合约库，包括管理合约所有权、升级、访问限制、治理、可暂停等功能。*
+
+### 智能合约审计服务
+
+- **[ConsenSys Diligence(opens in a new tab)](https://consensys.net/diligence/)** - *为整个区块链生态系统中的项目提供帮助的智能合约审计服务，确保其协议可直接发布并为保护用户而构建。*
+- **[CertiK(opens in a new tab)](https://www.certik.com/)** - *区块链安全公司，率先在智能合约和区块链网络上采用尖端的形式化验证技术。*
+- **[Trail of Bits(opens in a new tab)](https://www.trailofbits.com/)** - *网络安全公司，将安全研究与攻击者心态结合起来以降低风险并强化代码。*
+- **[PeckShield(opens in a new tab)](https://peckshield.com/)** - *区块链安全公司，为整个区块链生态系统的安全、隐私和可用性提供产品和服务。*
+- **[QuantStamp (opens in a new tab)](https://quantstamp.com/)** - *审计服务，通过安全和风险评估服务促进主流区块链技术的采用。*
+- **[OpenZeppelin(opens in a new tab)](https://www.openzeppelin.com/security-audits)** - *智能合约安全公司，为分布式系统提供安全审计。*
+- **[Runtime Verification(opens in a new tab)](https://runtimeverification.com/)** - *安全公司，专门从事智能合约的形式化建模与验证。*
+- **[Hacken(opens in a new tab)](https://hacken.io/)** - *Web3 网络安全审计公司，为区块链安全提供全方位解决方案。*
+- **[Nethermind(opens in a new tab)](https://nethermind.io/smart-contracts-audits)** - *Solidity 和 Cairo 审计服务，确保智能合约的完整性和跨以太坊和 Starknet 的用户安全*
+- **[HashEx(opens in a new tab)](https://hashex.org/)** - *HashEx 专注于区块链和智能合约审计，确保加密货币安全，提供智能合约开发、渗透测试、区块链咨询等服务。*
+- **[Code4rena(opens in a new tab)](https://code4rena.com/)** - *竞争性审计平台，激励智能合约安全专家查找漏洞，帮助提高 web3 的安全性。*
+
+### 漏洞奖励平台
+
+- **[Immunefi(opens in a new tab)](https://immunefi.com/)** - *智能合约和去中心化金融项目的漏洞奖励平台，安全研究人员在该平台上审查代码、披露漏洞、获得报酬并使加密应用更加安全。*
+- **[HackerOne(opens in a new tab)](https://www.hackerone.com/)** - *漏洞协调和漏洞奖励平台，将企业与渗透测试人员和网络安全研究人员连接在一起。*
+- **[HackenProof(opens in a new tab)](https://hackenproof.com/)** - *针对加密项目（去中心化金融、智能合约、钱包、中心化交易所等）的专业级漏洞奖励平台，借助这一平台，安全专家可提供漏洞诊断服务，研究人员会因为提供经过验证的相关漏洞报告获得报酬。*
+
+### 已知智能合约漏洞及利用情况的刊物
+
+- **[ConsenSys：已知的智能合约攻击(opens in a new tab)](https://consensys.github.io/smart-contract-best-practices/attacks/)** - *针对最重要的合约漏洞提供适合初学者的解释，多数案例提供了代码示例。*
+- **[SWC 注册表(opens in a new tab)](https://swcregistry.io/)** - *适用于以太坊智能合约的常见缺陷枚举 (CWE) 的精选项目列表。*
+- **[Rekt(opens in a new tab)](https://rekt.news/)** - *定期更新的著名加密领域黑客攻击和漏洞利用范例刊物，不提供详细的事后分析报告。*
+
+### 智能合约安全学习难点
+
+- **[Awesome BlockSec CTF(opens in a new tab)](https://github.com/blockthreat/blocksec-ctfs)** - *精选区块链安全攻防、实战、[夺旗(opens in a new tab)](https://www.webopedia.com/definitions/ctf-event/amp/)竞赛和解决方案的文章列表。*
+- **[Damn Vulnerable DeFi(opens in a new tab)](https://www.damnvulnerabledefi.xyz/)** - *通过实战演练学习去中心化金融智能合约的攻击性安全，并培养漏洞搜查和安全审计方面的技能。*
+- **[Ethernaut(opens in a new tab)](https://ethernaut.openzeppelin.com/)** - *基于 Web3 和 Solidity 的实战演练，其中每个等级都是一个需要“攻破”的智能合约。*
+
+### 确保智能合约安全的最佳做法
+
+- **[ConsenSys：以太坊智能合约安全最佳实践(opens in a new tab)](https://consensys.github.io/smart-contract-best-practices/)** - *保护以太坊智能合约安全的完整指南列表。*
+- **[Nascent：简单的安全工具箱(opens in a new tab)](https://github.com/nascentxyz/simple-security-toolkit)** - *智能合约开发的实用安全指南和检查清单的集合。*
+- **[Solidity 模式(opens in a new tab)](https://fravoll.github.io/solidity-patterns/)** - *面向智能合约编程语言 Solidity 的安全模式和最佳实践实用合集。*
+- **[Solidity文档：安全性注意事项(opens in a new tab)](https://docs.soliditylang.org/en/v0.8.16/security-considerations.html)** - *用Solidity编写安全智能合约的准则。*
+- **[智能合约安全验证标准(opens in a new tab)](https://github.com/securing/SCSVS)** - *旨在确立智能合约安全性标准的第十四部分检查清单，面向开发者、架构师、安全审核者和供应商。*
+
+### 智能合约安全性教程
+
+- [如何编写安全的智能合约](https://ethereum.org/zh/developers/tutorials/secure-development-workflow/)
+- [如何使用 Slither 查找智能合约漏洞](https://ethereum.org/zh/developers/tutorials/how-to-use-slither-to-find-smart-contract-bugs/)
+- [如何使用 Manticore 查找智能合约漏洞](https://ethereum.org/zh/developers/tutorials/how-to-use-manticore-to-find-smart-contract-bugs/)
+- [智能合约安全性准则](https://ethereum.org/zh/developers/tutorials/smart-contract-security-guidelines/)
+- [如何安全整合代币合约与任意代币](https://ethereum.org/zh/developers/tutorials/token-integration-checklist/)
+
+[更多攻击类型](http://x2d.co/solidity/safe/ReentrancyAttack)
