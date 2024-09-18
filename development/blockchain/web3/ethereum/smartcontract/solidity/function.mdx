@@ -1,0 +1,75 @@
+---
+title: 'solidity函数可见性修饰符区别'
+date: '2024-09-18'
+lastmod: '2024-09-18'
+tags: ['solidity', 'ethereum']
+categories: ['solidity']
+draft: false
+summary: '在Solidity中，external和public是函数可见性修饰符，它们之间确实有一些重要的区别。'
+images: []
+top_img: 
+cover: 
+---
+
+在Solidity中，`external`和`public`是函数可见性修饰符，它们之间有一些重要的区别：
+
+1. 调用方式：
+   - `external`函数只能从合约外部调用。合约内部如果要调用这个函数，必须使用`this.functionName()`。
+   - `public`函数可以从合约内部和外部调用。
+2. gas消耗：
+   - `external`函数在处理大型数据结构时通常更加高效，因为它们可以直接从calldata读取参数。
+   - `public`函数需要先将参数复制到内存中，这会消耗更多的gas。
+3. 继承：
+   - `public`函数可以被子合约继承和重写。
+   - `external`函数不能被子合约继承和重写。
+4. 接口：
+   - 在定义接口时，所有函数都默认为`external`。
+5. 数据位置：
+   - `external`函数的参数强制使用`calldata`存储位置。
+   - `public`函数的参数使用`memory`存储位置。
+
+代码示例:
+
+```solidity
+solidityCopypragma solidity ^0.8.0;
+
+contract ExampleContract {
+    uint public data;
+
+    // 外部函数
+    function externalFunction(uint[] calldata _data) external {
+        data = _data[0];
+    }
+
+    // 公共函数
+    function publicFunction(uint[] memory _data) public {
+        data = _data[0];
+    }
+
+    // 内部函数调用外部函数的例子
+    function callExternalFunction(uint[] memory _data) public {
+        // 必须使用this关键字
+        this.externalFunction(_data);
+    }
+
+    // 内部函数调用公共函数的例子
+    function callPublicFunction(uint[] memory _data) public {
+        // 可以直接调用
+        publicFunction(_data);
+    }
+}
+```
+
+在这个例子中：
+
+1. `externalFunction` 只能从合约外部调用，或者使用 `this` 关键字从内部调用。它的参数使用 `calldata`。
+2. `publicFunction` 可以从内部或外部调用。它的参数使用 `memory`。
+3. `callExternalFunction` 展示了如何从合约内部调用一个外部函数。
+4. `callPublicFunction` 展示了如何从合约内部调用一个公共函数。
+
+选择使用 `external` 还是 `public` 取决于您的具体需求：
+
+- 如果函数只需要从外部调用，使用 `external` 可以节省 gas。
+- 如果函数需要在合约内部和外部都能调用，或者需要被继承，那么使用 `public`。
+
+在编写智能合约时，正确选择函数的可见性修饰符可以提高合约的效率和安全性。您是否还有关于这个主题的其他问题？
