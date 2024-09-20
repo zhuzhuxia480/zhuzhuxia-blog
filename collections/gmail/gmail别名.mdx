@@ -1,0 +1,74 @@
+---
+title: '利用谷歌邮箱别名获取无限Gmail邮箱'
+date: '2024-09-17'
+lastmod: '2024-09-17'
+tags: ['gmail','email', '邮箱']
+categories: ['gmail']
+draft: false
+summary: '利用谷歌邮箱别名获取无限Gmail邮箱'
+images: []
+top_img: 
+cover: 
+---
+
+## 前言
+
+我们注册有些国外的服务时，是不能用国内邮箱注册的，这时一个Gmail邮箱就显得很有必要。而有时候我们会需要注册多个账号，当然你可以用多个Gmail邮箱来注册。但多个Gmail邮箱又不好管理，而且现在Gmail邮箱也不是那么好注册了，这时你就会需要下面我要介绍的内容了，利用Gmail邮箱的别名功能来实现同一邮箱获取无限多个Gmail邮箱号。
+
+在这之前你需要有一个谷歌账号（Gmail邮箱）。没有的话去到这里注册：[http://mail.google.com](http://mail.google.com/)（目前注册可能需要特殊方法，请自行搜索解决）。
+
+## Gmail邮箱别名设置
+
+这里我们假设你的Gmail邮箱为：`abcdef@gmail.com` ，那就可以通过以下办法得到无限的谷歌邮箱别名。
+
+### 1.用户名之间加 `.` （英文半角）
+
+> **例如：** `abc.def@gmail.com`
+>
+> 因为Gmail的用户名是不区分 `.` 符号的，所以下面其实都是同一个用户名
+
+- abcde.f
+- a.bcdef
+- ab.cdef
+- a.b.cdef
+- abc.d.ef
+
+### 2.用户名后面加 `+任意字符`
+
+> **例如：** `abcdef+dev@gmail.com`
+>
+> `+` 号后面可以是任意字符，例如：
+
+- +dev
+- +my
+- +sub
+- ……
+
+**PS：**使用“+”号法，在许多网站注册时候，并不识别邮箱地址中的“+”，会提示你邮箱错误。
+
+### 3.改变用户名中任意字符的大小写
+
+> **例如：** `aBCdef@gmail.com`
+>
+> 可以是用户名里的某个或多个字符，
+
+- [Abcdef@gmail.com](mailto:Abcdef@gmail.com)
+- [AbcDeF@gmail.com](mailto:AbcDeF@gmail.com)
+- [abcdEf@gmail.com](mailto:abcdEf@gmail.com)
+
+### 4. 把后缀变为 `googlemail.com`
+
+> 因为之前Gmail在某些国家的商标没有谈好，不能使用Gmail商标，只好用googlemail，这个很好理解。（貌似现在全球的商标都已经谈妥了）
+
+**例如：** `abcdef@googlemail.com`
+
+### ５.以上４种方法的结合
+
+> 可以结合上面的4种方法来实现理论上的无限别名。例如：
+
+- [aBcdef+dev@googlemail.com](mailto:aBcdef+dev@googlemail.com)
+- [AbcDEf+sub@googlemail.com](mailto:AbcDEf+sub@googlemail.com)
+
+## 总结
+
+了解了上面的Gmail别名设置的方法后，当你要注册一些服务的时候，只要在填写Gmail邮箱的时候填写通过上述的方法得到的别名邮箱就可以了。无需到Gmail设置，所有的别名邮箱的邮件都会发送到你原来的邮箱 `abcdef@gmail.com` 中。

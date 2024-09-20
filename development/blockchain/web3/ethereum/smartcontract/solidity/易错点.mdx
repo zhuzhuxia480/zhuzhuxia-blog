@@ -1,0 +1,88 @@
+---
+title: 'solidity易错点'
+date: '2024-09-19'
+lastmod: '2024-09-19'
+tags: ['solidity']
+categories: ['solidity']
+draft: false
+summary: ''
+images: []
+top_img: 
+cover: 
+---
+
+# 易错点集合
+
+## 映射的规则
+
+- **规则1**：映射的`_KeyType`只能选择Solidity内置的值类型，比如`uint`，`address`等，不能用自定义的结构体。而`_ValueType`可以使用自定义的类型。下面这个例子会报错，因为`_KeyType`使用了我们自定义的结构体：
+
+  ```solidity
+  // 我们定义一个结构体 Struct
+  struct Student{
+      uint256 id;
+      uint256 score; 
+  }
+  mapping(Student => uint) public testVar;
+  ```
+
+- **规则2**：映射的存储位置必须是`storage`，因此可以用于合约的状态变量，函数中的`storage`变量和library函数的参数（见[例子](https://github.com/ethereum/solidity/issues/4635)）。不能用于`public`函数的参数或返回结果中，因为`mapping`记录的是一种关系 (key - value pair)。
+
+- **规则3**：如果映射声明为`public`，那么Solidity会自动给你创建一个`getter`函数，可以通过`Key`来查询对应的`Value`。
+
+- **规则4**：给映射新增的键值对的语法为`_Var[_Key] = _Value`，其中`_Var`是映射变量名，`_Key`和`_Value`对应新增的键值对。例子：
+
+  ```solidity
+  function writeMap (uint _Key, address _Value) public{
+      idToAddress[_Key] = _Value;
+  }
+  ```
+
+---
+
+## delete操作符
+
+`delete a`会让变量`a`的值变为初始值。
+
+```solidity
+// delete操作符
+bool public _bool2 = true; 
+function d() external {
+    delete _bool2; // delete 会让_bool2变为默认值，false
+}
+```
+
+---
+
+## 修饰器
+
+修饰器（`modifier`）是`Solidity`特有的语法，类似于面向对象编程中的装饰器（`decorator`），声明函数拥有的特性，并减少代码冗余。它就像钢铁侠的智能盔甲，穿上它的函数会带有某些特定的行为。`modifier`的主要使用场景是运行函数前的检查，例如地址，变量，余额等。
+
+定义一个叫做onlyOwner的modifier：
+
+```solidity
+// 定义modifier
+modifier onlyOwner {
+   require(msg.sender == owner); // 检查调用者是否为owner地址
+   _; // 如果是的话，继续运行函数主体；否则报错并revert交易
+}
+```
+
+
+
+带有`onlyOwner`修饰符的函数只能被`owner`地址调用，比如下面这个例子：
+
+```solidity
+function changeOwner(address _newOwner) external onlyOwner{
+   owner = _newOwner; // 只有owner地址运行这个函数，并改变owner
+}
+```
+
+
+
+我们定义了一个`changeOwner`函数，运行它可以改变合约的`owner`，但是由于`onlyOwner`修饰符的存在，只有原先的`owner`可以调用，别人调用就会报错。这也是最常用的控制智能合约权限的方法。
+
+---
+
+
+
