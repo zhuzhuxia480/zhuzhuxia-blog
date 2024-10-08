@@ -153,3 +153,125 @@ solidityCopyfunction transferETH(address payable _to, uint256 amount) external p
 
 总结： 在原始函数中，`amount` 并不自动使用 `msg.value` 的值。即使合约初始余额为 0，函数也会尝试转移指定的 `amount`，而不是 `msg.value`。这种设计可能导致意外行为，因此在实际应用中应该重新设计函数以确保 `amount` 和 `msg.value` 的一致性，或者直接使用 `msg.value` 作为转账金额。这样可以提高函数的安全性和可预测性。
 
+## external 和 public的区别
+
+在 Solidity 中，`external` 和 `public` 是用于定义函数可见性的两个关键字，它们决定了函数在合约中的调用方式及其访问权限。以下是它们的主要区别和使用场景：
+
+### 1. **`external` 函数**
+
+- **定义**：`external` 函数只能通过合约外部（例如其他合约或外部账户）调用，不能在合约内部调用（除非通过 `this` 关键字）。
+
+- **参数传递**：对于 `external` 函数，参数在调用时通过消息传递，这可能会比 `public` 函数稍微高效一些，因为 Solidity 不需要在内存中复制参数。
+
+- 使用场景
+
+  ：
+
+  - 当你希望函数仅被外部调用，且不需要在合约内部使用时。
+  - 适合处理用户交互或合约间调用的函数。
+
+```
+solidity复制代码contract Example {
+    function externalFunction(uint256 _value) external {
+        // 函数逻辑
+    }
+}
+```
+
+### 2. **`public` 函数**
+
+- **定义**：`public` 函数可以被合约内部和外部调用，意味着你可以在合约内部或通过其他合约/外部账户访问该函数。
+
+- **参数传递**：`public` 函数的参数在合约内部调用时是通过内存传递，可能会稍微增加一些开销。
+
+- 使用场景
+
+  ：
+
+  - 当你希望函数可以被合约内部或外部调用时。
+  - 适合实现某些逻辑需要合约内部调用的情况。
+
+```
+solidity复制代码contract Example {
+    function publicFunction(uint256 _value) public {
+        // 函数逻辑
+    }
+}
+```
+
+### 3. **总结**
+
+- 使用 `external` 当：
+  - 你只希望合约外部能调用这个函数。
+  - 函数不需要被合约内部调用。
+- 使用 `public` 当：
+  - 你希望函数能被合约内部和外部调用。
+
+### 4. **示例**
+
+以下是一个简单的合约示例，展示了 `external` 和 `public` 函数的使用：
+
+```
+solidity复制代码contract Example {
+    uint256 public value;
+
+    // external 函数，只能外部调用
+    function setValueExternal(uint256 _value) external {
+        value = _value;
+    }
+
+    // public 函数，可以内部和外部调用
+    function setValuePublic(uint256 _value) public {
+        value = _value;
+    }
+
+    // 合约内部调用 external 函数的方式
+    function callExternal() public {
+        this.setValueExternal(10); // 使用 this 调用 external 函数
+    }
+}
+```
+
+在这个例子中，`setValueExternal` 只能通过外部调用，而 `setValuePublic` 可以在合约内部和外部调用。在 `callExternal` 函数中，我们通过 `this` 调用 `external` 函数，这是 `external` 函数的唯一内部调用方式。
+
+
+
+## erc721 和 erc165的关系
+
+ERC721 实现了 ERC165 标准，具体体现在以下几个方面：
+
+1. **接口识别**：
+   - ERC721 通过实现 ERC165，使得任何 ERC721 合约都能够声明它支持 ERC721 接口。这使得其他合约或应用程序可以使用 ERC165 来检测某个合约是否是一个 ERC721 合约。
+2. **方法实现**：
+   - 在实现 ERC721 合约时，通常会重写 ERC165 的 `supportsInterface` 方法，以声明它支持 ERC721 接口。
+   - 例如，ERC721 合约会返回 `true` 当传入的接口标识符是 ERC721 的标识符时。
+
+### 示例
+
+以下是一个简单的 ERC721 合约示例，演示了如何实现 ERC165 和声明支持 ERC721 接口：
+
+```
+solidity复制代码pragma solidity ^0.8.0;
+
+import "@openzeppelin/contracts/token/ERC721/ERC721.sol";
+import "@openzeppelin/contracts/utils/introspection/ERC165.sol";
+
+contract MyNFT is ERC721, ERC165 {
+    constructor() ERC721("MyNFT", "MNFT") {}
+
+    // 实现 supportsInterface 方法
+    function supportsInterface(bytes4 interfaceId) 
+        public view virtual override(ERC721, ERC165) returns (bool) {
+        return super.supportsInterface(interfaceId);
+    }
+}
+```
+
+在这个示例中，`MyNFT` 合约继承了 `ERC721` 和 `ERC165`，并重写了 `supportsInterface` 方法。这使得合约能够声明它支持 ERC721 接口，其他合约可以通过 ERC165 查询来检查它是否支持 ERC721。
+
+### 总结
+
+- **ERC721** 是一种非同质化代币标准，主要用于创建独特的代币。
+- **ERC165** 是一种接口检测标准，允许合约识别自己支持的接口。
+- **关系**：ERC721 实现了 ERC165，允许其他合约检测一个合约是否是 ERC721 合约，从而增强合约之间的互操作性。
+
