@@ -1,0 +1,61 @@
+---
+title: 'modifier'
+date: '2024-10-27'
+lastmod: '2024-10-27'
+tags: ['solidity','modifier','etherume']
+categories: ['web3']
+draft: false
+summary: ''
+images: []
+top_img: 
+cover: 
+---
+
+在 Solidity 的 modifier 中，`_;` 是一个特殊的符号，表示**被修饰函数的具体执行位置**。它相当于一个占位符，告诉编译器在这个位置插入被修饰函数的代码。
+
+让我通过例子详细解释：
+
+```solidity
+// 定义一个modifier
+modifier onlyOwner() {
+    require(msg.sender == admin, "Timelock: Caller not admin");
+    _; // 执行被修饰的函数内容
+}
+
+// 使用这个modifier的函数
+function withdraw() public onlyOwner {
+    // 函数的具体逻辑
+    payable(msg.sender).transfer(address(this).balance);
+}
+```
+
+当上面的代码执行时，实际的执行顺序是：
+
+1. 先执行 modifier 中 `_;` 之前的代码（检查调用者是否为admin）
+2. 如果检查通过，在 `_;` 的位置执行函数 `withdraw()` 的具体逻辑
+3. 如果有 `_;` 之后的代码，则继续执行（这个例子中没有）
+
+你也可以把 `_;` 放在 modifier 的其他位置，这会改变代码的执行顺序：
+
+```solidity
+modifier checkAndLog() {
+    console.log("开始执行");    // 1. 先执行
+    _;                          // 2. 执行函数本体
+    console.log("执行完成");    // 3. 最后执行
+}
+
+// 另一种常见用法：锁定模式
+modifier lock() {
+    require(!locked, "合约已锁定");
+    locked = true;     // 1. 先锁定
+    _;                 // 2. 执行函数
+    locked = false;    // 3. 执行完后解锁
+}
+```
+
+`_;` 的放置位置决定了:
+1. 前置条件检查（像你的例子）
+2. 后置操作（如日志记录）
+3. 环绕操作（如锁定机制）
+
+这使得 modifier 成为一个强大的代码复用和安全控制工具。
