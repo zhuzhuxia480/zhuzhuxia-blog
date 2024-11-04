@@ -328,3 +328,163 @@ contract MyNFT is ERC721, ERC165 {
 ### 总结
 
 合约调用时，`msg.value` 不会被强制全部花掉。你可以根据业务逻辑选择如何处理 `msg.value`，可以全部转移、部分转移或全部保留在合约中。这取决于你在合约中的具体实现。
+
+
+
+## 合约代理
+
+当通过代理合约调用逻辑合约时,所有的存储操作实际上都是在修改代理合约的存储空间。这是因为 delegatecall 的特殊机制。
+
+```solidity
+// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.0;
+
+// 代理合约
+contract Proxy {
+    // 存储槽 0
+    address public implementation;
+    // 存储槽 1
+    address public admin;
+    // 存储槽 2
+    uint256 public value;
+    
+    constructor(address _implementation) {
+        implementation = _implementation;
+        admin = msg.sender;
+    }
+    
+    fallback() external payable {
+        address _implementation = implementation;
+        
+        assembly {
+            calldatacopy(0, 0, calldatasize())
+            let result := delegatecall(gas(), _implementation, 0, calldatasize(), 0, 0)
+            returndatacopy(0, 0, returndatasize())
+            
+            switch result
+            case 0 { revert(0, returndatasize()) }
+            default { return(0, returndatasize()) }
+        }
+    }
+}
+
+// 逻辑合约 V1
+contract LogicV1 {
+    // 必须与代理合约保持相同的存储布局
+    address public implementation;
+    address public admin;
+    uint256 public value;
+    
+    // 更新值的函数
+    function setValue(uint256 _value) external {
+        value = _value;  // 实际上修改的是代理合约中的 value
+    }
+    
+    function getValue() external view returns (uint256) {
+        return value;    // 实际上读取的是代理合约中的 value
+    }
+}
+
+// 逻辑合约 V2
+contract LogicV2 {
+    // 保持相同的存储布局
+    address public implementation;
+    address public admin;
+    uint256 public value;
+    
+    // 新增功能：将值翻倍
+    function doubleValue() external {
+        value = value * 2;  // 依然是修改代理合约中的 value
+    }
+    
+    // 新增功能：检查值是否为偶数
+    function isEven() external view returns (bool) {
+        return value % 2 == 0;  // 读取代理合约中的 value
+    }
+}
+
+// 测试合约
+contract TestProxy {
+    function testStorage(address proxyAddress) external {
+        // 通过代理调用 LogicV1
+        Proxy proxy = Proxy(proxyAddress);
+        LogicV1(proxyAddress).setValue(100);
+        
+        // 验证值确实存储在代理合约中
+        require(proxy.value() == 100, "Value not set in proxy");
+        
+        // 升级到 LogicV2
+        // 假设我们已经部署了 LogicV2 并更新了实现地址
+        
+        // 调用新功能
+        LogicV2(proxyAddress).doubleValue();
+        
+        // 验证新值
+        require(proxy.value() == 200, "Value not doubled in proxy");
+    }
+}
+
+```
+
+让我解释这个过程：
+
+1. 存储位置：
+```solidity
+// 在代理合约中实际存储的数据
+Proxy {
+    implementation = 0x123...  // 存储槽 0
+    admin = 0x456...          // 存储槽 1
+    value = 100              // 存储槽 2
+}
+
+// 逻辑合约中的变量声明只是"映射"，不存储实际数据
+LogicV1 {
+    implementation;  // 映射到代理的存储槽 0
+    admin;          // 映射到代理的存储槽 1
+    value;          // 映射到代理的存储槽 2
+}
+```
+
+2. delegatecall 的工作流程：
+```solidity
+// 当用户调用 setValue(100)
+proxy.setValue(100);
+
+// 实际发生的过程：
+1. 调用进入代理合约的 fallback
+2. fallback 使用 delegatecall 调用逻辑合约的 setValue
+3. setValue 在代理合约的上下文中执行
+4. value = 100 写入代理合约的存储槽 2
+```
+
+3. 升级过程中的数据持久性：
+```solidity
+// 1. 初始状态
+proxy.value == 100
+
+// 2. 升级到 LogicV2
+// 3. 调用新函数
+proxy.doubleValue()
+
+// 4. 最终状态
+proxy.value == 200  // 数据依然存储在代理合约中
+```
+
+4. 关键点总结：
+- 所有状态变量实际上都存储在代理合约中
+- 逻辑合约中的变量声明只是为了正确定位存储槽
+- delegatecall 使得逻辑合约的代码在代理合约的存储上下文中执行
+- 这就是为什么可以升级逻辑而保持数据不变
+
+5. 注意事项：
+- 永远不要在逻辑合约的构造函数中初始化状态变量
+- 状态变量的修改要通过函数进行
+- 使用初始化函数而不是构造函数
+- 小心处理复杂数据结构（如映射和数组）的存储布局
+
+这种机制使得代理模式能够实现合约逻辑的升级而不丢失状态数据，这也是为什么它在可升级合约中如此重要。
+
+
+
+
+
