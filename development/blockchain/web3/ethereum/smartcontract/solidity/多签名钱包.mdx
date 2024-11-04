@@ -1,0 +1,354 @@
+---
+title: '多签名钱包'
+date: '2024-11-03'
+lastmod: '2024-11-03'
+tags: ['solidity', 'etherume']
+categories: ['web3']
+draft: false
+summary: ''
+images: []
+top_img: 
+cover: 
+---
+
+实现一个基础的多签名钱包合约，包含主要功能和安全考虑：
+
+```solidity
+// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.0;
+
+contract MultiSigWallet {
+    // 事件
+    event Deposit(address indexed sender, uint amount);
+    event Submit(uint indexed txId);
+    event Approve(address indexed owner, uint indexed txId);
+    event Revoke(address indexed owner, uint indexed txId);
+    event Execute(uint indexed txId);
+    
+    // 交易结构体
+    struct Transaction {
+        address to;      // 目标地址
+        uint value;      // 转账金额
+        bytes data;      // 调用数据
+        bool executed;   // 是否已执行
+    }
+    
+    // 多签持有人地址
+    address[] public owners;
+    // 地址是否为多签持有人
+    mapping(address => bool) public isOwner;
+    // 需要多少人同意
+    uint public required;
+    
+    // 所有交易
+    Transaction[] public transactions;
+    // 交易的投票情况 tx id => owner => approved
+    mapping(uint => mapping(address => bool)) public approved;
+    
+    // 修饰器
+    modifier onlyOwner() {
+        require(isOwner[msg.sender], "not owner");
+        _;
+    }
+    
+    modifier txExists(uint _txId) {
+        require(_txId < transactions.length, "tx does not exist");
+        _;
+    }
+    
+    modifier notApproved(uint _txId) {
+        require(!approved[_txId][msg.sender], "tx already approved");
+        _;
+    }
+    
+    modifier notExecuted(uint _txId) {
+        require(!transactions[_txId].executed, "tx already executed");
+        _;
+    }
+    
+    constructor(address[] memory _owners, uint _required) {
+        require(_owners.length > 0, "owners required");
+        require(
+            _required > 0 && _required <= _owners.length,
+            "invalid required number of owners"
+        );
+        
+        // 初始化多签持有人
+        for (uint i = 0; i < _owners.length; i++) {
+            address owner = _owners[i];
+            
+            require(owner != address(0), "invalid owner");
+            require(!isOwner[owner], "owner not unique");
+            
+            isOwner[owner] = true;
+            owners.push(owner);
+        }
+        
+        required = _required;
+    }
+    
+    // 接收ETH
+    receive() external payable {
+        emit Deposit(msg.sender, msg.value);
+    }
+    
+    // 提交交易
+    function submit(address _to, uint _value, bytes calldata _data)
+        external
+        onlyOwner
+    {
+        transactions.push(Transaction({
+            to: _to,
+            value: _value,
+            data: _data,
+            executed: false
+        }));
+        
+        emit Submit(transactions.length - 1);
+    }
+    
+    // 批准交易
+    function approve(uint _txId)
+        external
+        onlyOwner
+        txExists(_txId)
+        notApproved(_txId)
+        notExecuted(_txId)
+    {
+        approved[_txId][msg.sender] = true;
+        emit Approve(msg.sender, _txId);
+    }
+    
+    // 获取交易的批准数量
+    function _getApprovalCount(uint _txId) private view returns (uint count) {
+        for (uint i = 0; i < owners.length; i++) {
+            if (approved[_txId][owners[i]]) {
+                count += 1;
+            }
+        }
+    }
+    
+    // 执行交易
+    function execute(uint _txId)
+        external
+        txExists(_txId)
+        notExecuted(_txId)
+    {
+        require(
+            _getApprovalCount(_txId) >= required,
+            "approvals < required"
+        );
+        
+        Transaction storage transaction = transactions[_txId];
+        
+        transaction.executed = true;
+        
+        (bool success, ) = transaction.to.call{value: transaction.value}(
+            transaction.data
+        );
+        require(success, "tx failed");
+        
+        emit Execute(_txId);
+    }
+    
+    // 撤销批准
+    function revoke(uint _txId)
+        external
+        onlyOwner
+        txExists(_txId)
+        notExecuted(_txId)
+    {
+        require(approved[_txId][msg.sender], "tx not approved");
+        approved[_txId][msg.sender] = false;
+        emit Revoke(msg.sender, _txId);
+    }
+    
+    // 获取所有持有人
+    function getOwners() external view returns (address[] memory) {
+        return owners;
+    }
+    
+    // 获取交易数量
+    function getTransactionCount() external view returns (uint) {
+        return transactions.length;
+    }
+    
+    // 获取交易信息
+    function getTransaction(uint _txId)
+        external
+        view
+        returns (
+            address to,
+            uint value,
+            bytes memory data,
+            bool executed,
+            uint approvalCount
+        )
+    {
+        Transaction storage transaction = transactions[_txId];
+        
+        return (
+            transaction.to,
+            transaction.value,
+            transaction.data,
+            transaction.executed,
+            _getApprovalCount(_txId)
+        );
+    }
+}
+
+```
+
+让我详细解释这个多签钱包的主要功能：
+
+1. 基本结构：
+```solidity
+struct Transaction {
+    address to;      // 接收地址
+    uint value;      // 转账金额
+    bytes data;      // 调用数据
+    bool executed;   // 是否已执行
+}
+```
+
+2. 主要状态变量：
+```solidity
+address[] public owners;                    // 多签持有人列表
+mapping(address => bool) public isOwner;    // 地址是否为持有人
+uint public required;                       // 需要的最小确认数
+Transaction[] public transactions;          // 交易列表
+mapping(uint => mapping(address => bool)) public approved;  // 交易的确认情况
+```
+
+3. 核心功能：
+
+a. 提交交易：
+```solidity
+function submit(address _to, uint _value, bytes calldata _data)
+    external
+    onlyOwner
+{
+    transactions.push(Transaction({
+        to: _to,
+        value: _value,
+        data: _data,
+        executed: false
+    }));
+    emit Submit(transactions.length - 1);
+}
+```
+
+b. 批准交易：
+```solidity
+function approve(uint _txId)
+    external
+    onlyOwner
+    txExists(_txId)
+    notApproved(_txId)
+    notExecuted(_txId)
+{
+    approved[_txId][msg.sender] = true;
+    emit Approve(msg.sender, _txId);
+}
+```
+
+c. 执行交易：
+```solidity
+function execute(uint _txId)
+    external
+    txExists(_txId)
+    notExecuted(_txId)
+{
+    require(_getApprovalCount(_txId) >= required, "approvals < required");
+    Transaction storage transaction = transactions[_txId];
+    transaction.executed = true;
+    
+    (bool success, ) = transaction.to.call{value: transaction.value}(
+        transaction.data
+    );
+    require(success, "tx failed");
+    
+    emit Execute(_txId);
+}
+```
+
+4. 安全特性：
+
+a. 修饰器：
+```solidity
+modifier onlyOwner() {
+    require(isOwner[msg.sender], "not owner");
+    _;
+}
+
+modifier txExists(uint _txId) {
+    require(_txId < transactions.length, "tx does not exist");
+    _;
+}
+
+modifier notExecuted(uint _txId) {
+    require(!transactions[_txId].executed, "tx already executed");
+    _;
+}
+```
+
+b. 构造函数检查：
+```solidity
+constructor(address[] memory _owners, uint _required) {
+    require(_owners.length > 0, "owners required");
+    require(
+        _required > 0 && _required <= _owners.length,
+        "invalid required number of owners"
+    );
+    // 检查持有人地址有效性
+    // 检查持有人地址唯一性
+}
+```
+
+5. 使用示例：
+
+```solidity
+// 1. 部署合约
+address[] memory owners = new address[](3);
+owners[0] = address1;
+owners[1] = address2;
+owners[2] = address3;
+MultiSigWallet wallet = new MultiSigWallet(owners, 2); // 需要2个确认
+
+// 2. 提交交易
+wallet.submit(recipient, 1 ether, "");
+
+// 3. 批准交易
+wallet.approve(0);  // 第一个持有人批准
+// 从另一个账号
+wallet.approve(0);  // 第二个持有人批准
+
+// 4. 执行交易
+wallet.execute(0);
+```
+
+6. 安全考虑：
+- 持有人不能重复
+- 需要的确认数必须合理
+- 交易执行前必须检查确认数
+- 已执行的交易不能重复执行
+- 撤销机制允许纠正错误
+- 事件记录所有重要操作
+
+7. 可能的改进：
+- 添加更换持有人的功能
+- 添加修改所需确认数的功能
+- 添加交易超时机制
+- 添加每日限额
+- 添加交易队列
+- 支持批量交易
+- 添加紧急暂停功能
+
+使用时需要注意：
+1. 确保持有人私钥安全
+2. 交易执行前仔细检查参数
+3. 重要操作最好等待足够确认数
+4. 定期检查交易历史
+5. 考虑设置合理的确认数要求
+
+这个实现提供了基本的多签功能，可以根据具体需求进行扩展。
