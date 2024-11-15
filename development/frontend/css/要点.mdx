@@ -1,0 +1,57 @@
+---
+title: 'css importantance'
+date: '2024-11-13'
+lastmod: '2024-11-13'
+tags: ['frontend', 'css']
+categories: ['frontend', 'css']
+draft: false
+summary: ''
+images: []
+top_img: 
+cover: 
+---
+
+# relative 和absolute的区别
+
+`relative` 和 `absolute` 是 CSS 中常用的定位方式，它们的区别在于它们如何影响元素的定位参考点和元素在页面中的位置。
+
+### 1. **relative（相对定位）**
+
+- **定义**：相对定位会让元素根据自身的正常位置进行偏移。
+- **偏移参考**：偏移是相对于元素原本的位置。
+- **位置占用**：即使元素偏移，它原本所占的空间仍然会保留。
+- **常用场景**：通常用来做偏移调整，或者用于创建一个父容器，让内部的 `absolute` 元素相对于它定位。
+
+#### 示例
+
+```
+html复制代码<div class="relative" style="top: 10px; left: 20px;">
+  相对定位的元素
+</div>
+```
+
+在这个例子中，`div` 会在原来位置的基础上向下移动 `10px`，向右移动 `20px`，但它原来所在的位置仍然会占据页面空间。
+
+### 2. **absolute（绝对定位）**
+
+- **定义**：绝对定位将元素完全从正常文档流中移出，使其相对于最近的非 `static` 定位的父元素进行偏移。
+- **偏移参考**：如果元素的父级元素是 `relative`、`absolute`、或 `fixed`，则 `absolute` 会以该父元素为参考，否则以页面根元素为参考。
+- **位置占用**：绝对定位的元素不再占据原本的位置，页面内容会填充该位置。
+- **常用场景**：用于创建浮动元素、弹出框等，能够相对于容器进行精确定位。
+
+#### 示例
+
+```
+html复制代码<div class="relative" style="width: 200px; height: 200px;">
+  <div class="absolute" style="top: 10px; left: 20px;">
+    绝对定位的元素
+  </div>
+</div>
+```
+
+在这个例子中，内部的 `absolute` 元素会相对于父 `relative` 容器定位，而不会相对于页面整体定位。该元素会在父元素的左上角偏移 `10px` 向下和 `20px` 向右。
+
+### 总结
+
+- **relative**：相对于元素自身原始位置，保留空间，占据原位置。
+- **absolute**：相对于最近的非 `static` 父级元素，不占据空间，脱离文档流
