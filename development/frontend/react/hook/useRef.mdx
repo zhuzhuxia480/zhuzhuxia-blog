@@ -1,0 +1,228 @@
+---
+title: 'useRef in react'
+date: '2024-11-18 09:29:15'
+lastmod: '2024-11-18 09:29:15'
+tags: ['useRef', 'frontend']
+categories: ['frontend']
+draft: false
+summary: ''
+images: []
+top_img: 
+cover: 
+---
+
+让我详细解释一下 React 中的 useRef Hook 及其使用场景。
+
+useRef 是 React 提供的一个 Hook，它主要有两个重要用途：
+1. 保存对 DOM 元素的引用
+2. 在组件多次渲染之间保存数据（且更新不会触发重新渲染）
+
+让我们通过具体示例来详细说明：
+
+
+
+```tsx
+import React, { useRef, useState, useEffect } from 'react';
+
+const UseRefDemo = () => {
+  // 1. DOM 引用
+  const inputRef = useRef(null);
+  
+  // 2. 保存数据的引用
+  const countRef = useRef(0);
+  
+  // 普通 state，用于对比
+  const [count, setCount] = useState(0);
+  
+  // 3. 保存之前的值
+  const prevCountRef = useRef();
+  
+  useEffect(() => {
+    prevCountRef.current = count;
+  }, [count]);
+
+  // 4. 用于计时器的引用
+  const timerRef = useRef();
+  
+  const focusInput = () => {
+    // 直接访问 DOM 元素
+    inputRef.current.focus();
+  };
+
+  const handleClick = () => {
+    // 更新 ref 不会导致重新渲染
+    countRef.current = countRef.current + 1;
+    console.log('当前点击次数:', countRef.current);
+  };
+
+  const handleStateClick = () => {
+    // 更新 state 会导致重新渲染
+    setCount(count + 1);
+  };
+
+  const startTimer = () => {
+    if (timerRef.current) return; // 防止多次启动
+    
+    timerRef.current = setInterval(() => {
+      setCount(c => c + 1);
+    }, 1000);
+  };
+
+  const stopTimer = () => {
+    clearInterval(timerRef.current);
+    timerRef.current = null;
+  };
+
+  return (
+    <div className="p-4 space-y-4">
+      <div className="space-y-2">
+        <h3 className="text-lg font-bold">1. DOM 引用示例</h3>
+        <input
+          ref={inputRef}
+          type="text"
+          className="border p-2 rounded"
+          placeholder="点击按钮聚焦"
+        />
+        <button
+          onClick={focusInput}
+          className="ml-2 px-4 py-2 bg-blue-500 text-white rounded"
+        >
+          聚焦输入框
+        </button>
+      </div>
+
+      <div className="space-y-2">
+        <h3 className="text-lg font-bold">2. 引用值 vs State</h3>
+        <p>Ref 计数 (不会触发重渲染): {countRef.current}</p>
+        <p>State 计数 (会触发重渲染): {count}</p>
+        <p>上一次的 count 值: {prevCountRef.current}</p>
+        <button
+          onClick={handleClick}
+          className="mr-2 px-4 py-2 bg-green-500 text-white rounded"
+        >
+          增加 Ref 计数
+        </button>
+        <button
+          onClick={handleStateClick}
+          className="px-4 py-2 bg-purple-500 text-white rounded"
+        >
+          增加 State 计数
+        </button>
+      </div>
+
+      <div className="space-y-2">
+        <h3 className="text-lg font-bold">3. 计时器控制</h3>
+        <button
+          onClick={startTimer}
+          className="mr-2 px-4 py-2 bg-yellow-500 text-white rounded"
+        >
+          开始计时
+        </button>
+        <button
+          onClick={stopTimer}
+          className="px-4 py-2 bg-red-500 text-white rounded"
+        >
+          停止计时
+        </button>
+      </div>
+    </div>
+  );
+};
+
+export default UseRefDemo;
+
+```
+
+让我详细解释 useRef 的主要使用场景：
+
+1. **访问 DOM 元素**
+   ```jsx
+   const inputRef = useRef(null);
+   <input ref={inputRef} />
+   ```
+   - 可以直接操作 DOM 元素
+   - 常用于焦点管理、测量元素、集成第三方库
+
+2. **保存可变值**
+   ```jsx
+   const countRef = useRef(0);
+   countRef.current++; // 更新不会触发重渲染
+   ```
+   - 值的改变不会触发组件重新渲染
+   - 在整个组件生命周期中保持不变
+   - 适合存储不需要渲染的数据
+
+3. **保存前一个值**
+   ```jsx
+   const prevCountRef = useRef();
+   useEffect(() => {
+     prevCountRef.current = count;
+   }, [count]);
+   ```
+   - 可以记录之前的 props 或 state
+   - 用于比较或处理值的变化
+
+4. **定时器/事件监听器引用**
+   ```jsx
+   const timerRef = useRef();
+   timerRef.current = setInterval(() => {}, 1000);
+   clearInterval(timerRef.current);
+   ```
+   - 方便清理副作用
+   - 防止内存泄漏
+
+useRef 的重要特性：
+
+1. **持久性**
+   - ref 在组件的整个生命周期内保持不变
+   - 即使组件重新渲染，ref 对象也始终指向同一个内存地址
+
+2. **可变性**
+   - 可以自由修改 .current 属性
+   - 修改不会触发组件重新渲染
+
+3. **同步访问**
+   - 可以立即获取或设置值
+   - 不像 state 的更新是异步的
+
+使用建议：
+
+1. **何时使用 useRef**
+   - 需要直接操作 DOM 时
+   - 需要存储不触发渲染的值时
+   - 需要在异步操作中保持数据时
+
+2. **何时不使用 useRef**
+   - 数据需要显示在 UI 上时（使用 useState）
+   - 数据变化需要触发重新渲染时
+   - 作为派生状态的来源时
+
+3. **最佳实践**
+   - 谨慎使用 DOM 操作
+   - 及时清理副作用
+   - 避免过度依赖 ref 操作
+
+常见陷阱和注意事项：
+
+1. 不要在渲染期间读取或写入 .current
+2. 确保在组件卸载时清理定时器等资源
+3. 使用 TypeScript 时注意正确设置泛型类型
+4. 注意 ref 的初始值设置
+
+useRef 与其他特性的结合：
+
+1. **配合 useEffect**
+   ```jsx
+   useEffect(() => {
+     ref.current = someValue;
+   });
+   ```
+
+2. **配合 useCallback**
+   ```jsx
+   const callback = useCallback(() => {
+     ref.current.someMethod();
+   }, []);
+   ```
+
+需要帮助理解特定场景下的使用或者有其他问题吗？
