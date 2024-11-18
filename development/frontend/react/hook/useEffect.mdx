@@ -1,0 +1,255 @@
+---
+
+
+
+---
+
+通过具体的示例详细解释 useEffect 的使用。useEffect 主要用于处理副作用，比如API调用、订阅事件、修改DOM等。
+
+```tsx
+import React, { useState, useEffect } from 'react';
+import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+
+const UseEffectDemo = () => {
+  // 示例1：基础计数器
+  const [count, setCount] = useState(0);
+  
+  // 示例2：窗口宽度
+  const [windowWidth, setWindowWidth] = useState(window.innerWidth);
+  
+  // 示例3：搜索功能
+  const [search, setSearch] = useState('');
+  const [results, setResults] = useState([]);
+  
+  // 示例4：自动保存
+  const [text, setText] = useState('');
+  const [savedText, setSavedText] = useState('');
+
+  // 示例1：每次count改变时更新标题
+  useEffect(() => {
+    document.title = `您点击了 ${count} 次`;
+    
+    // 清理函数：组件卸载时恢复标题
+    return () => {
+      document.title = '网页';
+    };
+  }, [count]); // 依赖数组：仅当count改变时执行
+
+  // 示例2：监听窗口大小变化
+  useEffect(() => {
+    // 定义事件处理函数
+    const handleResize = () => {
+      setWindowWidth(window.innerWidth);
+    };
+    
+    // 添加事件监听
+    window.addEventListener('resize', handleResize);
+    
+    // 清理函数：移除事件监听
+    return () => {
+      window.removeEventListener('resize', handleResize);
+    };
+  }, []); // 空依赖数组：仅在组件挂载时执行一次
+
+  // 示例3：模拟搜索API调用
+  useEffect(() => {
+    // 如果搜索词为空，不执行搜索
+    if (!search) {
+      setResults([]);
+      return;
+    }
+
+    // 设置定时器模拟API调用
+    const timer = setTimeout(() => {
+      setResults([
+        `搜索结果 1 for "${search}"`,
+        `搜索结果 2 for "${search}"`,
+        `搜索结果 3 for "${search}"`
+      ]);
+    }, 500);
+
+    // 清理函数：取消之前的定时器
+    return () => clearTimeout(timer);
+  }, [search]); // 依赖search：搜索词变化时执行
+
+  // 示例4：自动保存功能
+  useEffect(() => {
+    if (!text) return;
+
+    // 设置3秒后自动保存
+    const saveTimer = setTimeout(() => {
+      setSavedText(text);
+    }, 3000);
+
+    // 清理函数：如果用户继续输入，取消之前的保存定时器
+    return () => clearTimeout(saveTimer);
+  }, [text]); // 依赖text：文本变化时执行
+
+  return (
+    <div className="space-y-6 p-4">
+      {/* 示例1：计数器 */}
+      <Card>
+        <CardHeader>
+          <CardTitle>示例1: 更新文档标题</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <p>点击次数: {count}</p>
+          <Button onClick={() => setCount(count + 1)}>
+            增加计数
+          </Button>
+          <p className="text-sm text-gray-500">
+            查看浏览器标签页的标题变化
+          </p>
+        </CardContent>
+      </Card>
+
+      {/* 示例2：窗口宽度 */}
+      <Card>
+        <CardHeader>
+          <CardTitle>示例2: 监听窗口大小</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <p>当前窗口宽度: {windowWidth}px</p>
+          <p className="text-sm text-gray-500">
+            调整浏览器窗口大小查看效果
+          </p>
+        </CardContent>
+      </Card>
+
+      {/* 示例3：搜索功能 */}
+      <Card>
+        <CardHeader>
+          <CardTitle>示例3: 搜索功能</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <Input
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="输入搜索内容..."
+          />
+          <div className="space-y-2">
+            {results.map((result, index) => (
+              <p key={index}>{result}</p>
+            ))}
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* 示例4：自动保存 */}
+      <Card>
+        <CardHeader>
+          <CardTitle>示例4: 自动保存</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <Input
+            value={text}
+            onChange={(e) => setText(e.target.value)}
+            placeholder="输入文本，3秒后自动保存..."
+          />
+          <p>已保存的内容: {savedText}</p>
+        </CardContent>
+      </Card>
+    </div>
+  );
+};
+
+export default UseEffectDemo;
+
+```
+
+让我详细解释 useEffect 的关键概念：
+
+1. **基本语法**
+```javascript
+useEffect(() => {
+    // 副作用代码
+    return () => {
+        // 清理函数（可选）
+    };
+}, [依赖数组]);
+```
+
+2. **依赖数组的三种情况**：
+   - `[]` (空数组)：仅在组件挂载时执行一次
+   - `[依赖1, 依赖2]`：当依赖项改变时执行
+   - 不提供依赖数组：每次渲染都执行
+
+3. **示例解释**：
+
+a) **更新文档标题** (示例1)
+```javascript
+useEffect(() => {
+    document.title = `您点击了 ${count} 次`;
+    return () => {
+        document.title = '网页';  // 清理函数
+    };
+}, [count]);  // 依赖count
+```
+- 当 count 变化时执行
+- 组件卸载时恢复标题
+
+b) **监听窗口变化** (示例2)
+```javascript
+useEffect(() => {
+    const handleResize = () => setWindowWidth(window.innerWidth);
+    window.addEventListener('resize', handleResize);
+    return () => {
+        window.removeEventListener('resize', handleResize); // 清理函数
+    };
+}, []); // 空依赖数组
+```
+- 组件挂载时添加监听器
+- 组件卸载时移除监听器
+
+c) **搜索功能** (示例3)
+```javascript
+useEffect(() => {
+    if (!search) return;
+    const timer = setTimeout(() => {
+        // 模拟API调用
+        setResults([...]);
+    }, 500);
+    return () => clearTimeout(timer); // 清理函数
+}, [search]); // 依赖search
+```
+- 实现防抖：用户输入暂停500ms后才执行搜索
+- 新搜索开始前取消之前的搜索
+
+d) **自动保存** (示例4)
+```javascript
+useEffect(() => {
+    if (!text) return;
+    const saveTimer = setTimeout(() => {
+        setSavedText(text);
+    }, 3000);
+    return () => clearTimeout(saveTimer); // 清理函数
+}, [text]); // 依赖text
+```
+- 用户停止输入3秒后自动保存
+- 继续输入时取消之前的保存定时器
+
+4. **使用注意事项**：
+
+- 清理函数很重要，可以防止内存泄漏
+- 合理使用依赖数组，避免无限循环
+- 不要在循环、条件或嵌套函数中使用useEffect
+- useEffect 内部的函数可以是异步的，但 useEffect 的参数函数不能是异步的
+
+错误示范：
+```javascript
+// ❌ 错误：直接使用异步函数
+useEffect(async () => {
+    const data = await fetchData();
+}, []);
+
+// ✅ 正确：在内部使用异步函数
+useEffect(() => {
+    const fetchData = async () => {
+        const data = await fetch('/api/data');
+    };
+    fetchData();
+}, []);
+```
+

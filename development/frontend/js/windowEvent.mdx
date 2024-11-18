@@ -1,0 +1,252 @@
+---
+title: 'window 事件'
+date: '2024-11-15 11:00:16'
+lastmod: '2024-11-15 11:00:16'
+tags: ['window', 'event']
+categories: ['javascript', 'frontend']
+draft: false
+summary: ''
+images: []
+top_img: 
+cover: 
+---
+
+
+
+让我系统地介绍 window 对象上的主要事件类型，并提供示例代码。
+
+```tsx
+import React, { useState, useEffect } from 'react';
+import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
+
+const WindowEventsDemo = () => {
+    const [logs, setLogs] = useState([]);
+    const [isOnline, setIsOnline] = useState(navigator.onLine);
+
+    // 添加日志的辅助函数
+    const addLog = (message) => {
+        const timestamp = new Date().toLocaleTimeString();
+        setLogs(prev => [`${timestamp}: ${message}`, ...prev].slice(0, 10));
+    };
+
+    useEffect(() => {
+        // 窗口尺寸和滚动事件
+        const handleResize = () => addLog(`窗口大小变化 - ${window.innerWidth}x${window.innerHeight}`);
+        const handleScroll = () => addLog(`页面滚动 - scrollY: ${window.scrollY}px`);
+        
+        // 焦点事件
+        const handleFocus = () => addLog('窗口获得焦点');
+        const handleBlur = () => addLog('窗口失去焦点');
+        
+        // 网络状态事件
+        const handleOnline = () => {
+            setIsOnline(true);
+            addLog('网络连接恢复');
+        };
+        const handleOffline = () => {
+            setIsOnline(false);
+            addLog('网络连接断开');
+        };
+        
+        // 键盘事件
+        const handleKeyDown = (e) => addLog(`键盘按下: ${e.key}`);
+        
+        // 存储事件
+        const handleStorage = (e) => addLog(`localStorage变化 - key: ${e.key}`);
+
+        // 注册事件监听器
+        window.addEventListener('resize', handleResize);
+        window.addEventListener('scroll', handleScroll);
+        window.addEventListener('focus', handleFocus);
+        window.addEventListener('blur', handleBlur);
+        window.addEventListener('online', handleOnline);
+        window.addEventListener('offline', handleOffline);
+        window.addEventListener('keydown', handleKeyDown);
+        window.addEventListener('storage', handleStorage);
+
+        // 清理函数
+        return () => {
+            window.removeEventListener('resize', handleResize);
+            window.removeEventListener('scroll', handleScroll);
+            window.removeEventListener('focus', handleFocus);
+            window.removeEventListener('blur', handleBlur);
+            window.removeEventListener('online', handleOnline);
+            window.removeEventListener('offline', handleOffline);
+            window.removeEventListener('keydown', handleKeyDown);
+            window.removeEventListener('storage', handleStorage);
+        };
+    }, []);
+
+    // 测试 localStorage 事件
+    const handleUpdateStorage = () => {
+        localStorage.setItem('testKey', new Date().toISOString());
+    };
+
+    return (
+        <div className="space-y-6 p-4">
+            <Card>
+                <CardHeader>
+                    <CardTitle>Window 事件演示</CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                    <div className="space-y-2">
+                        <p>网络状态: {isOnline ? '在线' : '离线'}</p>
+                        <Button onClick={handleUpdateStorage}>
+                            更新 localStorage
+                        </Button>
+                    </div>
+                    <div className="border rounded p-4 h-60 overflow-auto">
+                        {logs.map((log, index) => (
+                            <p key={index} className="text-sm">{log}</p>
+                        ))}
+                    </div>
+                </CardContent>
+            </Card>
+        </div>
+    );
+};
+
+export default WindowEventsDemo;
+
+```
+
+以下是 window 对象上主要的事件类型分类：
+
+1. **窗口相关事件**
+```javascript
+// 窗口大小变化
+window.addEventListener('resize', () => {});
+
+// 窗口滚动
+window.addEventListener('scroll', () => {});
+
+// 窗口获得/失去焦点
+window.addEventListener('focus', () => {});
+window.addEventListener('blur', () => {});
+
+// 页面加载相关
+window.addEventListener('load', () => {});      // 页面完全加载
+window.addEventListener('unload', () => {});    // 页面卸载
+window.addEventListener('beforeunload', () => {}); // 页面即将卸载
+```
+
+2. **网络状态事件**
+```javascript
+// 在线状态变化
+window.addEventListener('online', () => {});
+window.addEventListener('offline', () => {});
+```
+
+3. **键盘事件**
+```javascript
+// 键盘按下
+window.addEventListener('keydown', (e) => {
+    console.log(e.key, e.keyCode);
+});
+
+// 键盘释放
+window.addEventListener('keyup', (e) => {});
+
+// 键盘按下并释放
+window.addEventListener('keypress', (e) => {});
+```
+
+4. **存储事件**
+```javascript
+// localStorage 或 sessionStorage 变化
+window.addEventListener('storage', (e) => {
+    console.log(e.key, e.oldValue, e.newValue);
+});
+```
+
+5. **错误处理事件**
+```javascript
+// JavaScript 错误
+window.addEventListener('error', (e) => {
+    console.log(e.message, e.filename, e.lineno);
+});
+
+// Promise 未捕获的 rejection
+window.addEventListener('unhandledrejection', (e) => {
+    console.log(e.reason);
+});
+```
+
+6. **设备相关事件**
+```javascript
+// 设备方向改变
+window.addEventListener('orientationchange', () => {});
+
+// 设备移动
+window.addEventListener('devicemotion', (e) => {
+    console.log(e.acceleration, e.rotationRate);
+});
+
+// 设备方向
+window.addEventListener('deviceorientation', (e) => {
+    console.log(e.alpha, e.beta, e.gamma);
+});
+```
+
+7. **剪贴板事件**
+```javascript
+// 剪切/复制/粘贴
+window.addEventListener('copy', (e) => {});
+window.addEventListener('cut', (e) => {});
+window.addEventListener('paste', (e) => {});
+```
+
+8. **打印相关事件**
+```javascript
+// 页面打印前后
+window.addEventListener('beforeprint', () => {});
+window.addEventListener('afterprint', () => {});
+```
+
+9. **可见性事件**
+```javascript
+// 页面可见性改变
+document.addEventListener('visibilitychange', () => {
+    if (document.hidden) {
+        console.log('页面隐藏');
+    } else {
+        console.log('页面可见');
+    }
+});
+```
+
+使用建议：
+
+1. **性能考虑**
+```javascript
+// 使用防抖或节流处理频繁触发的事件
+const handleScroll = _.throttle(() => {
+    console.log('滚动位置:', window.scrollY);
+}, 100);
+
+window.addEventListener('scroll', handleScroll);
+```
+
+2. **事件选项**
+```javascript
+// 添加事件监听器的选项
+window.addEventListener('scroll', handleScroll, {
+    capture: true,    // 在捕获阶段处理
+    once: true,       // 只触发一次
+    passive: true     // 承诺不会调用 preventDefault()
+});
+```
+
+3. **清理监听器**
+```javascript
+// React 组件中清理监听器
+useEffect(() => {
+    const handler = () => {};
+    window.addEventListener('resize', handler);
+    return () => window.removeEventListener('resize', handler);
+}, []);
+```
+
+
+

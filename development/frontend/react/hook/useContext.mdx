@@ -1,0 +1,112 @@
+---
+title: 'useContext in react'
+date: '2024-11-18 09:44:45'
+lastmod: '2024-11-18 09:44:45'
+tags: ['useContext', 'fronted']
+categories: ['fronted']
+draft: false
+summary: ''
+images: []
+top_img: 
+cover: 
+---
+
+想象一下这个场景：你有一个网站，需要让用户切换深色/浅色主题。如果不用 useContext，你需要从最顶层组件一层层往下传递主题信息，很麻烦。
+
+让我们看一个最简单的例子：
+
+```tsx
+import React, { createContext, useContext, useState } from 'react';
+
+// 1. 创建一个 Context
+const ThemeContext = createContext(null);
+
+// 2. 创建一个简单的按钮组件
+const ThemedButton = () => {
+  // 4. 使用 useContext 获取主题信息
+  const { theme, toggleTheme } = useContext(ThemeContext);
+  
+  return (
+    <button
+      onClick={toggleTheme}
+      style={{
+        background: theme === 'light' ? 'white' : 'black',
+        color: theme === 'light' ? 'black' : 'white',
+        padding: '10px',
+        border: '1px solid gray'
+      }}
+    >
+      当前是{theme === 'light' ? '浅色' : '深色'}主题，点击切换
+    </button>
+  );
+};
+
+// 3. 创建一个主应用
+const App = () => {
+  // 存储主题状态
+  const [theme, setTheme] = useState('light');
+  
+  // 切换主题的函数
+  const toggleTheme = () => {
+    setTheme(theme === 'light' ? 'dark' : 'light');
+  };
+
+  return (
+    // 使用 Provider 提供数据
+    <ThemeContext.Provider value={{ theme, toggleTheme }}>
+      <div style={{ padding: '20px' }}>
+        <h1>主题切换示例</h1>
+        <ThemedButton />
+      </div>
+    </ThemeContext.Provider>
+  );
+};
+
+export default App;
+
+```
+
+让我一步步解释这个简单例子：
+
+1. **第一步：创建 Context**
+```javascript
+const ThemeContext = createContext(null);
+```
+这就像创建一个公共的数据仓库。
+
+2. **第二步：提供数据（在父组件中）**
+```javascript
+<ThemeContext.Provider value={{ theme, toggleTheme }}>
+  {/* 子组件们 */}
+</ThemeContext.Provider>
+```
+这就像把数据放入仓库，所有被包裹的子组件都能访问这些数据。
+
+3. **第三步：使用数据（在子组件中）**
+```javascript
+const { theme, toggleTheme } = useContext(ThemeContext);
+```
+这就像从仓库取数据使用。
+
+useContext 的作用就是：
+- 避免一层层传递数据
+- 让任何子组件都能直接访问数据
+- 数据变化时相关组件会自动更新
+
+生活中的例子：
+想象一个商场：
+- Context 就像商场的广播系统
+- Provider 就像广播室
+- useContext 就像每个店铺的喇叭
+- 当广播室发布信息时，所有店铺都能听到
+
+使用场景：
+1. 主题切换（深色/浅色模式）
+2. 用户登录信息共享
+3. 语言切换
+4. 购物车数据共享
+
+基本步骤总结：
+1. 创建 Context（createContext）
+2. 用 Provider 包裹组件并提供数据
+3. 在需要数据的组件中用 useContext 获取数据
