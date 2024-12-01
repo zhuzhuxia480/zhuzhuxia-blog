@@ -1,0 +1,33 @@
+---
+title: '易错点'
+date: '2024-11-25'
+lastmod: '2024-11-25'
+tags: ['react', 'frontend']
+categories: ['react', 'frontend']
+draft: false
+summary: ''
+images: []
+top_img: 
+cover: 
+---
+
+## useState
+
+当调用useState的修改函数的时候，在同一个作用域中修改了，但是不会立即发生改变，如下例：
+
+```jsx
+const [tabType, setTabType] = useState('hot');
+const handleTabChange = (type) => {
+    console.log("1: before change:", tabType);
+    setTabType(type);
+    console.log("2: after change:", tabType);
+    console.log(type)
+    if (type === 'hot') {
+        setCommentList(_.orderBy(commentList, ['like'], 'desc'));
+    }else if(type === 'time') {
+        setCommentList(_.orderBy(commentList, ['ctime'], 'desc'));
+    }
+};
+```
+
+**在上面的例子中，1和2的输出的结果是一样的。**
